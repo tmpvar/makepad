@@ -177,6 +177,8 @@ impl Graph {
 
     // TODO: return graph event?
     pub fn handle_graph(&mut self, cx: &mut Cx, event: &mut Event) {
+
+        let mut save = false;
         match event {
             Event::Construct => {
                 self.state_file_read = cx.file_read(&self.state_file[..]);
@@ -262,10 +264,41 @@ impl Graph {
                     self.state.add_edge(src_addr.unwrap(), dest_addr.unwrap());
                 }
             },
+            Event::KeyDown(ke) => {
+                if ke.key_code == KeyCode::KeyA {
+                    let node = GraphNode {
+                        aabb: Rect {
+                            x: 100.0,
+                            y: 300.0,
+                            w: 100.0,
+                            h: 50.0,
+                        },
+                        inputs: vec![
+                            GraphNodePort{
+                                ..Style::style(cx)
+                            },
+                            GraphNodePort{
+                                ..Style::style(cx)
+                            },
+                        ],
+                        outputs: vec![
+                            GraphNodePort{
+                                ..Style::style(cx)
+                            },
+                            GraphNodePort{
+                                ..Style::style(cx)
+                            },
+                        ],
+                        ..Style::style(cx)
+                    };
+                    self.add_node(node);
+                    save = true;
+                    self.graph_view.redraw_view_area(cx);
+                }
+            }
             _ => ()
         }
 
-        let mut save = false;
         let mut new_edge: Option<GraphEdge> = None;
         let mut skip: Option<Uuid> = None;
         match &mut self.temp_graph_edge {
