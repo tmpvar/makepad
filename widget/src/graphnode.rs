@@ -38,10 +38,50 @@ pub enum GraphNodeEvent {
   ......................
 */
 
+pub trait GraphNodeCore {
+    fn draw_node_core(&mut self, cx: &mut Cx, renderable_area: &mut Rect) {}
+
+    fn handle_node_core(&mut self, cx: &mut Cx, event: &mut Event) {}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GraphNodeCoreType {
+    #[serde(rename = "none ")]
+    None,
+    #[serde(rename = "debug")]
+    Debug(DebugNode),
+}
+
+impl GraphNodeCore for GraphNodeCoreType {
+    fn draw_node_core(&mut self, cx: &mut Cx, renderable_area: &mut Rect) {
+        match self {
+            GraphNodeCoreType::Debug(n) => n.draw_node_core(cx, renderable_area),
+            _ => (),
+        }
+    }
+
+    fn handle_node_core(&mut self, cx: &mut Cx, event: &mut Event) {
+        match self {
+            GraphNodeCoreType::Debug(n) => n.handle_node_core(cx, event),
+            _ => (),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoopNode {}
+impl GraphNodeCore for NoopNode {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DebugNode {}
+impl GraphNodeCore for DebugNode {}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GraphNode {
     pub aabb: Rect,
     pub id: Uuid,
+
+    pub core: GraphNodeCoreType,
 
     pub inputs: Vec<GraphNodePort>,
     pub outputs: Vec<GraphNodePort>,
@@ -65,6 +105,7 @@ impl Style for GraphNode {
             },
             id: Uuid::new_v4(),
             animator: Animator::new(Anim::empty()),
+            core: GraphNodeCoreType::None,
             inputs: vec![],
             outputs: vec![],
         }
@@ -117,8 +158,9 @@ impl GraphNode {
     }
 
     pub fn draw_graph_node(&mut self, cx: &mut Cx, bg: &mut Quad, port_bg: &mut Quad) {
-        // TODO: build layout off of current state
         let aabb = self.aabb;
+        let mut core_aabb = aabb.clone();
+        self.core.draw_node_core(cx, &mut core_aabb);
 
         let inst = bg.draw_quad_abs(cx, aabb);
 
@@ -157,6 +199,7 @@ impl GraphNode {
         event: &mut Event,
         skip: &Option<Uuid>,
     ) -> GraphNodeEvent {
+        self.core.handle_node_core(cx, event);
         for input in &mut self.inputs {
             match input.handle(cx, event) {
                 GraphNodePortEvent::DragMove { fe } => {

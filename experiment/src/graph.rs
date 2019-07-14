@@ -368,7 +368,7 @@ impl Graph {
                                         self.temp_graph_edge = None;
                                         return;
                                     }
-                                    
+
                                     match edge.start.dir {
                                         PortDirection::Input => {
 
