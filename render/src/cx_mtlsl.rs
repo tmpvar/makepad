@@ -249,15 +249,30 @@ impl Cx {
     
     pub fn mtl_compile_shader(sh: &mut CxShader, metal_cx: &MetalCx) -> Result<(), SlErr> {
         let (mtlsl, mapping) = Self::mtl_assemble_shader(&sh.shader_gen) ?;
-        
+        match Self::compile_shader_source(&mtlsl, metal_cx) {
+            Ok(mut platform) => {
+                sh.mapping = mapping;
+                platform.geom_ibuf.update_with_u32_data(metal_cx, &sh.shader_gen.geometry_indices);
+                platform.geom_vbuf.update_with_f32_data(metal_cx, &sh.shader_gen.geometry_vertices);
+
+                sh.platform = Some(platform);
+                return Ok(());
+            },
+            Err(err) => {
+                return Err(err);
+            }
+        }
+    }
+
+    pub fn compile_shader_source(source: &String, metal_cx: &MetalCx) -> Result<CxPlatformShader, SlErr> {
         let options = CompileOptions::new();
-        let library = metal_cx.device.new_library_with_source(&mtlsl, &options);
+        let library = metal_cx.device.new_library_with_source(&source, &options);
         
         match library {
             Err(library) => return Err(SlErr {msg: library}),
             Ok(library) => {
-                sh.mapping = mapping;
-                sh.platform = Some(CxPlatformShader {
+
+                return Ok(CxPlatformShader {
                     pipeline_state: {
                         let vert = library.get_function("_vertex_shader", None).unwrap();
                         let frag = library.get_function("_fragment_shader", None).unwrap();
@@ -278,18 +293,9 @@ impl Cx {
                         metal_cx.device.new_render_pipeline_state(&rpd).unwrap()
                     },
                     library: library,
-                    geom_ibuf: {
-                        let mut geom_ibuf = MetalBuffer {..Default::default()};
-                        geom_ibuf.update_with_u32_data(metal_cx, &sh.shader_gen.geometry_indices);
-                        geom_ibuf
-                    },
-                    geom_vbuf: {
-                        let mut geom_vbuf = MetalBuffer {..Default::default()};
-                        geom_vbuf.update_with_f32_data(metal_cx, &sh.shader_gen.geometry_vertices);
-                        geom_vbuf
-                    }
+                    geom_ibuf: MetalBuffer {..Default::default()},
+                    geom_vbuf: MetalBuffer {..Default::default()},
                 });
-                return Ok(());
             }
         };
     }

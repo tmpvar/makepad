@@ -188,8 +188,39 @@ impl Cx {
         
         unsafe {msg_send![pool, release];}
     }
-    
-    
+
+    // TODO: add add/remove methods for dynamic shaders    
+    // let next_id = self.shaders.len();
+    // let store_id = self.shader_map.entry(shader.shader_gen.clone()).or_insert(next_id);
+
+    pub fn rebuild_dynamic_shaders(&mut self, metal_cx: &MetalCx) {
+        for (_id, mut shader) in self.dynamic_shader_map.iter_mut() {
+            if !shader.needs_rebuild {
+                continue;
+            }
+
+            let r = Cx::compile_shader_source(
+                &shader.source,
+                &metal_cx
+            );
+
+            match r {
+                Ok(_) => {
+                    println!("compiled shader source!");
+                    shader.valid = true;
+                    shader.error_log = String::from("");
+                }
+                Err(e) => {
+                    println!("SHADER ERROR: {}", e.msg);
+                    shader.valid = false;
+                    shader.error_log = e.msg;
+                }
+            }
+
+            shader.needs_rebuild = false;
+
+        }
+    }
     
     pub fn event_loop<F>(&mut self, mut event_handler: F)
     where F: FnMut(&mut Cx, &mut Event),
@@ -256,7 +287,7 @@ impl Cx {
                         self.call_event_handler(&mut event_handler, &mut event);
                     },
                     Event::Paint => {
-                        
+                        self.rebuild_dynamic_shaders(&metal_cx);
                         let vsync = self.process_desktop_paint_callbacks(cocoa_app.time_now(), &mut event_handler);
                         
                         // construct or destruct windows

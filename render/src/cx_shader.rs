@@ -109,6 +109,18 @@ pub struct CxShader {
     pub mapping: CxShaderMapping
 }
 
+#[derive(Default, Clone)]
+pub struct CxDynamicShader {
+    pub name: String,
+    pub shader_gen: ShaderGen,
+    pub platform: Option<CxPlatformShader>,
+    pub mapping: CxShaderMapping,
+    pub source: String,
+    pub needs_rebuild: bool,
+    pub error_log: String,
+    pub valid: bool,
+}
+
 impl CxShader {
     
     pub fn def_builtins(sg: ShaderGen) -> ShaderGen {

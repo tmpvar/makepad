@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::BTreeMap;
+use uuid::Uuid;
 
 pub use crate::shadergen::*;
 pub use crate::cx_fonts::*;
@@ -77,6 +78,8 @@ pub struct Cx {
     pub shaders: Vec<CxShader>,
     pub shader_map: HashMap<ShaderGen, usize>,
     
+    pub dynamic_shader_map: HashMap<Uuid, CxDynamicShader>,
+
     pub is_in_redraw_cycle: bool,
     pub window_stack: Vec<usize>,
     pub pass_stack: Vec<usize>,
@@ -171,6 +174,7 @@ impl Default for Cx {
             textures_free: Vec::new(),
             shaders: Vec::new(),
             shader_map: HashMap::new(),
+            dynamic_shader_map: HashMap::new(),
             
             is_in_redraw_cycle: false,
             window_stack: Vec::new(),
@@ -244,6 +248,45 @@ impl Cx {
         }
         Shader {shader_id: Some(*store_id)}
     }
+
+    // pub fn add_shader_source(&mut self, source: String, mapping: CxShaderMapping, name: String) -> Shader {
+    //     // TODO: it would be nice if shadergen wasn't a requirement
+    //     let sg = ShaderGen {
+    //         name: name.to_string(),
+    //         ..Default::default()
+    //     };
+
+    //     let mut shader = CxShader {
+    //         name: name.to_string(),
+    //         shader_gen: sg,
+    //         platform: None,
+    //         mapping: CxShaderMapping::default()
+    //     };
+
+    //     let r = Cx::compile_shader_source(
+    //         &mut shader,
+    //         source,
+    //         mapping,
+    //         &self.metal_cx
+    //     );
+    //     match r {
+    //         Ok(_) => {
+    //             println!("compiled shader source!");
+    //             let next_id = self.shaders.len();
+    //             let store_id = self.shader_map.entry(shader.shader_gen.clone()).or_insert(next_id);
+
+    //             if *store_id == next_id {
+    //                 println!("adding shader!");
+    //                 self.shaders.push(shader);
+    //             }
+    //             return Shader {shader_id: Some(*store_id)}
+    //         }
+    //         Err(e) => {
+    //             println!("SHADER ERROR: {}", e.msg);
+    //         }
+    //     }
+    //     return Shader {shader_id: None}
+    // }
     
     pub fn process_tap_count(&mut self, digit: usize, pos: Vec2, time: f64) -> u32 {
         if digit >= self.finger_tap_count.len() {
