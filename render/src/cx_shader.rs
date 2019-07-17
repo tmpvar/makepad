@@ -112,7 +112,6 @@ pub struct CxShader {
 #[derive(Default, Clone)]
 pub struct CxDynamicShader {
     pub name: String,
-    pub shader_gen: ShaderGen,
     pub platform: Option<CxPlatformShader>,
     pub mapping: CxShaderMapping,
     pub source: String,

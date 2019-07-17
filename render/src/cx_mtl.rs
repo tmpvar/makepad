@@ -194,10 +194,11 @@ impl Cx {
     // let store_id = self.shader_map.entry(shader.shader_gen.clone()).or_insert(next_id);
 
     pub fn rebuild_dynamic_shaders(&mut self, metal_cx: &MetalCx) {
-        for (_id, mut shader) in self.dynamic_shader_map.iter_mut() {
+        for (id, mut shader) in self.dynamic_shader_map.iter_mut() {
             if !shader.needs_rebuild {
                 continue;
             }
+            println!("attempting rebuild on {}", id);
 
             let r = Cx::compile_shader_source(
                 &shader.source,

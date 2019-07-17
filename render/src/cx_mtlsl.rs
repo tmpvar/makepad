@@ -249,6 +249,7 @@ impl Cx {
     
     pub fn mtl_compile_shader(sh: &mut CxShader, metal_cx: &MetalCx) -> Result<(), SlErr> {
         let (mtlsl, mapping) = Self::mtl_assemble_shader(&sh.shader_gen) ?;
+        println!("\n\n\n-------------SHADER---------------\n{}", mtlsl);
         match Self::compile_shader_source(&mtlsl, metal_cx) {
             Ok(mut platform) => {
                 sh.mapping = mapping;
@@ -267,15 +268,25 @@ impl Cx {
     pub fn compile_shader_source(source: &String, metal_cx: &MetalCx) -> Result<CxPlatformShader, SlErr> {
         let options = CompileOptions::new();
         let library = metal_cx.device.new_library_with_source(&source, &options);
+
         
+
         match library {
             Err(library) => return Err(SlErr {msg: library}),
             Ok(library) => {
+                if library.get_function("_vertex_shader", None).is_err() {
+                    return Err(SlErr {msg: String::from("missing _vertex_shader()")})
+                }          
+
+                if library.get_function("_fragment_shader", None).is_err() {
+                    return Err(SlErr {msg: String::from("missing _fragment_shader()")})
+                }
 
                 return Ok(CxPlatformShader {
                     pipeline_state: {
                         let vert = library.get_function("_vertex_shader", None).unwrap();
                         let frag = library.get_function("_fragment_shader", None).unwrap();
+
                         let rpd = RenderPipelineDescriptor::new();
                         rpd.set_vertex_function(Some(&vert));
                         rpd.set_fragment_function(Some(&frag));

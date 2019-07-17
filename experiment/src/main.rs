@@ -8,6 +8,7 @@ use crate::graph::Graph;
 
 use std::collections::HashMap;
 use serde::*;
+use uuid::Uuid;
 
 #[derive(Clone)]
 struct AppWindow {
@@ -76,7 +77,6 @@ impl AppWindow {
     fn handle_app_window(&mut self, cx: &mut Cx, event: &mut Event, window_index: usize, app_global: &mut AppGlobal) {
         self.graph.handle_graph(cx, event);
         match self.desktop_window.handle_desktop_window(cx, event) {
-
             DesktopWindowEvent::EventForOtherWindow => {
                 return
             },
@@ -111,6 +111,112 @@ impl AppWindow {
 
 impl AppGlobal {
     fn handle_construct(&mut self, cx: &mut Cx) {
+        // add a test shader that needs to be rebuilt
+        cx.dynamic_shader_map.insert(Uuid::new_v4(), CxDynamicShader {
+            name: String::from("some junk"),
+            needs_rebuild: true,
+            source: String::from("
+                #include <metal_stdlib>
+                using namespace metal;
+                struct _Geom{
+                    packed_float2 geom;
+                };
+
+                struct _Inst{
+                    float x;
+                    float y;
+                    float w;
+                    float h;
+                    packed_float4 color;
+                    packed_float2 start;
+                    packed_float2 end;
+                };
+
+                struct _UniCx{
+                    float4x4 camera_projection;
+                    float dpi_factor;
+                    float dpi_dilate;
+                };
+
+                struct _UniVw{
+                    float2 view_scroll;
+                    float4 view_clip;
+                };
+
+                struct _UniDr{
+                    float view_do_scroll;
+                };
+
+                struct _Loc{
+                    float2 df_pos;
+                    float4 df_result;
+                    float2 df_last_pos;
+                    float2 df_start_pos;
+                    float df_shape;
+                    float df_clip;
+                    float df_has_clip;
+                    float df_old_shape;
+                    float df_blur;
+                    float df_aa;
+                    float df_scale;
+                    float df_field;
+                };
+
+                struct _Tex{
+                };
+
+                #define  PI (3.141592653589793)
+                #define  E (2.718281828459045)
+                #define  LN2 (0.6931471805599453)
+                #define  LN10 (2.302585092994046)
+                #define  LOG2E (1.4426950408889634)
+                #define  LOG10E (0.4342944819032518)
+                #define  SQRT1_2 (0.7071067811865476)
+                #define  TORAD (0.017453292519943295)
+                #define  GOLDEN (1.618033988749895)
+                struct _Vary{
+                    float4 mtl_position [[position]];
+                    float2 pos;
+                    float w;
+                    float h;
+                    float2 start;
+                    float2 end;
+                    float4 color;
+                };
+
+                //Vertex shader
+                float4 _vertex(_Tex _tex, thread _Loc &_loc, thread _Vary &_vary, thread _Geom &_geom, thread _Inst &_inst, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                    float2 shift = -_uni_vw.view_scroll*_uni_dr.view_do_scroll;
+                    float2 clipped = clamp(float2(_geom.geom)*float2(float(_inst.w), float(_inst.h))+float2(float(_inst.x), float(_inst.y))+shift, _uni_vw.view_clip.xy, _uni_vw.view_clip.zw);
+                    _vary.pos = (clipped-shift-float2(float(_inst.x), float(_inst.y)))/float2(float(_inst.w), float(_inst.h));
+                    return float4(clipped.x, clipped.y, 0.0, 1.0)*_uni_cx.camera_projection;
+                }
+
+                vertex _Vary _vertex_shader(_Tex _tex, device _Geom *in_geometries [[buffer(0)]], device _Inst *in_instances [[buffer(1)]],
+                device _UniCx &_uni_cx [[buffer(2)]], device _UniVw &_uni_vw [[buffer(3)]], device _UniDr &_uni_dr [[buffer(4)]],
+                uint vtx_id [[vertex_id]], uint inst_id [[instance_id]]){
+                    _Loc _loc;
+                    _Vary _vary;
+                    _Geom _geom = in_geometries[vtx_id];
+                    _Inst _inst = in_instances[inst_id];
+                    _vary.mtl_position = _vertex(_tex, _loc, _vary, _geom, _inst, _uni_cx, _uni_vw, _uni_dr);
+
+                    _vary.w = _inst.w;
+                    _vary.h = _inst.h;
+                    _vary.start = _inst.start;
+                    _vary.end = _inst.end;
+                    _vary.color = _inst.color;
+                    return _vary;
+                };
+                fragment float4 _fragment_shader(){
+                    return float4(1, 0, 1, 1);
+                };                
+                
+                "
+            ),
+            ..Default::default()
+        });
+
     }
 
     fn save_state(&mut self, cx: &mut Cx) {
