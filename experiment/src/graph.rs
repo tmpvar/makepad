@@ -263,6 +263,7 @@ impl Graph {
                     self.add_node(node2);
                     self.state.add_edge(src_addr.unwrap(), dest_addr.unwrap());
                 }
+                self.construct_graph(cx);
             },
             Event::KeyDown(ke) => {
                 if ke.key_code == KeyCode::KeyA {
@@ -485,6 +486,14 @@ impl Graph {
         // TODO: render partial edges (e.g., anchored to one port and still dragging)
 
         self.graph_view.end_view(cx);
+    }
+
+    pub fn construct_graph(&mut self, cx: &mut Cx) {
+        println!("construct graph");
+        for (id, node) in &mut self.state.nodes {
+            println!("construct {}", id);
+            node.construct_graph_node(cx);
+        }
     }
 }
 

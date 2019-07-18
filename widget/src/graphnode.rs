@@ -39,12 +39,15 @@ pub enum GraphNodeEvent {
 */
 
 pub trait GraphNodeCore {
-    fn draw_node_core(&mut self, cx: &mut Cx, renderable_area: &mut Rect) {}
+    fn construct(&mut self, cx: &mut Cx);
+    fn draw_node_core(&mut self, cx: &mut Cx, renderable_area: &mut Rect) {
+        println!("default draw_node_core");
+    }
 
     fn handle_node_core(&mut self, cx: &mut Cx, event: &mut Event) {}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum GraphNodeCoreType {
     #[serde(rename = "none ")]
     None,
@@ -55,8 +58,11 @@ pub enum GraphNodeCoreType {
 impl GraphNodeCore for GraphNodeCoreType {
     fn draw_node_core(&mut self, cx: &mut Cx, renderable_area: &mut Rect) {
         match self {
-            GraphNodeCoreType::Debug(n) => n.draw_node_core(cx, renderable_area),
-            _ => (),
+            GraphNodeCoreType::Debug(n) => {
+                println!("draw_node_core!");
+                n.draw_node_core(cx, renderable_area);
+            }
+            _ =>  println!("draw_node_core missed"),
         }
     }
 
@@ -66,15 +72,171 @@ impl GraphNodeCore for GraphNodeCoreType {
             _ => (),
         }
     }
+
+    fn construct(&mut self, cx: &mut Cx) {
+        match self {
+            GraphNodeCoreType::Debug(n) => n.construct(cx),
+            _ => (),
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct NoopNode {}
-impl GraphNodeCore for NoopNode {}
+impl GraphNodeCore for NoopNode {
+    fn construct(&mut self, cx: &mut Cx) {
+        println!("construct noop");
+    }
+}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DebugNode {}
-impl GraphNodeCore for DebugNode {}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct DebugNode {
+    source: String,
+    #[serde(
+        skip_serializing,
+        skip_deserializing,
+    )]
+    bg: Option<Quad>,
+}
+
+fn default_debug_source() -> String {
+    String::from("
+        #include <metal_stdlib>
+        using namespace metal;
+        struct _Geom{
+            packed_float2 geom;
+        };
+
+        struct _Inst{
+            float x;
+            float y;
+            float w;
+            float h;
+            packed_float4 color;
+            packed_float2 start;
+            packed_float2 end;
+        };
+
+        struct _UniCx{
+            float4x4 camera_projection;
+            float dpi_factor;
+            float dpi_dilate;
+        };
+
+        struct _UniVw{
+            float2 view_scroll;
+            float4 view_clip;
+        };
+
+        struct _UniDr{
+            float view_do_scroll;
+        };
+
+        struct _Loc{
+            float2 df_pos;
+            float4 df_result;
+            float2 df_last_pos;
+            float2 df_start_pos;
+            float df_shape;
+            float df_clip;
+            float df_has_clip;
+            float df_old_shape;
+            float df_blur;
+            float df_aa;
+            float df_scale;
+            float df_field;
+        };
+
+        struct _Tex{
+        };
+
+        #define  PI (3.141592653589793)
+        #define  E (2.718281828459045)
+        #define  LN2 (0.6931471805599453)
+        #define  LN10 (2.302585092994046)
+        #define  LOG2E (1.4426950408889634)
+        #define  LOG10E (0.4342944819032518)
+        #define  SQRT1_2 (0.7071067811865476)
+        #define  TORAD (0.017453292519943295)
+        #define  GOLDEN (1.618033988749895)
+        struct _Vary{
+            float4 mtl_position [[position]];
+            float2 pos;
+            float w;
+            float h;
+            float2 start;
+            float2 end;
+            float4 color;
+        };
+
+        //Vertex shader
+        float4 _vertex(_Tex _tex, thread _Loc &_loc, thread _Vary &_vary, thread _Geom &_geom, thread _Inst &_inst, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+            float2 shift = -_uni_vw.view_scroll*_uni_dr.view_do_scroll;
+            float2 clipped = clamp(float2(_geom.geom)*float2(float(_inst.w), float(_inst.h))+float2(float(_inst.x), float(_inst.y))+shift, _uni_vw.view_clip.xy, _uni_vw.view_clip.zw);
+            _vary.pos = (clipped-shift-float2(float(_inst.x), float(_inst.y)))/float2(float(_inst.w), float(_inst.h));
+            return float4(clipped.x, clipped.y, 0.0, 1.0)*_uni_cx.camera_projection;
+        }
+
+        vertex _Vary _vertex_shader(_Tex _tex, device _Geom *in_geometries [[buffer(0)]], device _Inst *in_instances [[buffer(1)]],
+        device _UniCx &_uni_cx [[buffer(2)]], device _UniVw &_uni_vw [[buffer(3)]], device _UniDr &_uni_dr [[buffer(4)]],
+        uint vtx_id [[vertex_id]], uint inst_id [[instance_id]]){
+            _Loc _loc;
+            _Vary _vary;
+            _Geom _geom = in_geometries[vtx_id];
+            _Inst _inst = in_instances[inst_id];
+            _vary.mtl_position = _vertex(_tex, _loc, _vary, _geom, _inst, _uni_cx, _uni_vw, _uni_dr);
+
+            _vary.w = _inst.w;
+            _vary.h = _inst.h;
+            _vary.start = _inst.start;
+            _vary.end = _inst.end;
+            _vary.color = _inst.color;
+            return _vary;
+        };
+        fragment float4 _fragment_shader(){
+            return float4(1, 0, 1, 1);
+        };                
+        
+        "
+    )
+}
+
+impl GraphNodeCore for DebugNode {
+    fn construct(&mut self, cx: &mut Cx) {
+        println!("construct debugnode");
+        if self.source == "" {
+            self.source = default_debug_source()
+        }
+
+        // add a test shader that needs to be rebuilt
+        self.bg = Some(Quad {
+            do_scroll: false,
+            color: color("#FFF"),
+            shader: cx.add_dynamic_shader("some junk", CxDynamicShader {
+                needs_rebuild: true,
+                source: self.source.clone(),
+                ..Default::default()
+            })
+        });
+    }
+
+     fn draw_node_core(&mut self, cx: &mut Cx, renderable_area: &mut Rect) {
+         if let Some(bg) = &mut self.bg {
+             println!("DRAWING DEBUG CORE!!!");
+             bg.draw_quad_abs(cx, *renderable_area);
+         }
+     }
+}
+
+impl Default for DebugNode {
+    fn default() -> Self {
+        Self {
+            source: default_debug_source(),
+            bg: None,
+        }
+    }
+}
+
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GraphNode {
@@ -105,7 +267,7 @@ impl Style for GraphNode {
             },
             id: Uuid::new_v4(),
             animator: Animator::new(Anim::empty()),
-            core: GraphNodeCoreType::None,
+            core: GraphNodeCoreType::Debug(DebugNode::default()),
             inputs: vec![],
             outputs: vec![],
         }
@@ -191,6 +353,10 @@ impl GraphNode {
         }
 
         self.animator.update_area_refs(cx, inst.clone().into_area());
+    }
+
+    pub fn construct_graph_node (&mut self, cx: &mut Cx) {
+        self.core.construct(cx);
     }
 
     pub fn handle_graph_node(

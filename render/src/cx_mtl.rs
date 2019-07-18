@@ -29,6 +29,10 @@ impl Cx {
                 //view.platform.uni_vw.update_with_f32_data(device, &view.uniforms);
                 let draw_call = &mut cxview.draw_calls[draw_call_id];
                 let sh = &self.shaders[draw_call.shader_id];
+                // skip over dynamic shaders that haven't been built yet
+                if sh.platform.as_ref().is_none() {
+                    continue;
+                }
                 let shp = sh.platform.as_ref().unwrap();
                 
                 if draw_call.instance_dirty {
@@ -189,37 +193,39 @@ impl Cx {
         unsafe {msg_send![pool, release];}
     }
 
-    // TODO: add add/remove methods for dynamic shaders    
-    // let next_id = self.shaders.len();
-    // let store_id = self.shader_map.entry(shader.shader_gen.clone()).or_insert(next_id);
-
     pub fn rebuild_dynamic_shaders(&mut self, metal_cx: &MetalCx) {
-        for (id, mut shader) in self.dynamic_shader_map.iter_mut() {
-            if !shader.needs_rebuild {
-                continue;
-            }
-            println!("attempting rebuild on {}", id);
+        for (mut sh) in self.shaders.iter_mut() {
+            match &mut sh.dynamic {
+                Some(dsh) => {
+                    if !dsh.needs_rebuild {
+                        continue;
+                    }
+                    println!("attempting shader rebuild on {}", sh.name);
 
-            let r = Cx::compile_shader_source(
-                &shader.source,
-                &metal_cx
-            );
+                    let r = Cx::compile_shader_source(
+                        &dsh.source,
+                        &metal_cx
+                    );
 
-            match r {
-                Ok(_) => {
-                    println!("compiled shader source!");
-                    shader.valid = true;
-                    shader.error_log = String::from("");
+                    match r {
+                        Ok(platform) => {
+                            println!("compiled shader source!");
+                            dsh.valid = true;
+                            dsh.error_log = String::from("");
+                            sh.platform = Some(platform);
+                        }
+                        Err(e) => {
+                            println!("SHADER ERROR: {}", e.msg);
+                            dsh.valid = false;
+                            dsh.error_log = e.msg;
+                        }
+                    }
+
+                    dsh.needs_rebuild = false;
                 }
-                Err(e) => {
-                    println!("SHADER ERROR: {}", e.msg);
-                    shader.valid = false;
-                    shader.error_log = e.msg;
-                }
+                _ => ()
+
             }
-
-            shader.needs_rebuild = false;
-
         }
     }
     

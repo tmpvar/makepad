@@ -22,9 +22,11 @@ pub enum PackType {
 impl Cx {
     pub fn mtl_compile_all_shaders(&mut self, metal_cx: &MetalCx) {
         for sh in &mut self.shaders {
-            let mtlsh = Self::mtl_compile_shader(sh, metal_cx);
-            if let Err(err) = mtlsh {
-                panic!("Got metal shader compile error: {}", err.msg);
+            if sh.dynamic.is_none() {
+                let mtlsh = Self::mtl_compile_shader(sh, metal_cx);
+                if let Err(err) = mtlsh {
+                    panic!("Got metal shader compile error: {}", err.msg);
+                }
             }
         };
     }
@@ -249,7 +251,6 @@ impl Cx {
     
     pub fn mtl_compile_shader(sh: &mut CxShader, metal_cx: &MetalCx) -> Result<(), SlErr> {
         let (mtlsl, mapping) = Self::mtl_assemble_shader(&sh.shader_gen) ?;
-        println!("\n\n\n-------------SHADER---------------\n{}", mtlsl);
         match Self::compile_shader_source(&mtlsl, metal_cx) {
             Ok(mut platform) => {
                 sh.mapping = mapping;
@@ -268,8 +269,6 @@ impl Cx {
     pub fn compile_shader_source(source: &String, metal_cx: &MetalCx) -> Result<CxPlatformShader, SlErr> {
         let options = CompileOptions::new();
         let library = metal_cx.device.new_library_with_source(&source, &options);
-
-        
 
         match library {
             Err(library) => return Err(SlErr {msg: library}),

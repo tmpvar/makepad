@@ -243,51 +243,25 @@ impl Cx {
                 name: name.to_string(),
                 shader_gen: sg,
                 platform: None,
-                mapping: CxShaderMapping::default()
+                mapping: CxShaderMapping::default(),
+                dynamic: None,
             });
         }
         Shader {shader_id: Some(*store_id)}
     }
 
-    // pub fn add_shader_source(&mut self, source: String, mapping: CxShaderMapping, name: String) -> Shader {
-    //     // TODO: it would be nice if shadergen wasn't a requirement
-    //     let sg = ShaderGen {
-    //         name: name.to_string(),
-    //         ..Default::default()
-    //     };
+    pub fn add_dynamic_shader(&mut self, name: &str, shader: CxDynamicShader) -> Shader {
+        let next_id = self.shaders.len();
+        self.shaders.push(CxShader {
+            name: name.to_string(),
+            shader_gen: ShaderGen::new(),
+            platform: None,
+            mapping: CxShaderMapping::default(),
+            dynamic: Some(shader),
+        });
+        Shader {shader_id: Some(next_id)}
+    }
 
-    //     let mut shader = CxShader {
-    //         name: name.to_string(),
-    //         shader_gen: sg,
-    //         platform: None,
-    //         mapping: CxShaderMapping::default()
-    //     };
-
-    //     let r = Cx::compile_shader_source(
-    //         &mut shader,
-    //         source,
-    //         mapping,
-    //         &self.metal_cx
-    //     );
-    //     match r {
-    //         Ok(_) => {
-    //             println!("compiled shader source!");
-    //             let next_id = self.shaders.len();
-    //             let store_id = self.shader_map.entry(shader.shader_gen.clone()).or_insert(next_id);
-
-    //             if *store_id == next_id {
-    //                 println!("adding shader!");
-    //                 self.shaders.push(shader);
-    //             }
-    //             return Shader {shader_id: Some(*store_id)}
-    //         }
-    //         Err(e) => {
-    //             println!("SHADER ERROR: {}", e.msg);
-    //         }
-    //     }
-    //     return Shader {shader_id: None}
-    // }
-    
     pub fn process_tap_count(&mut self, digit: usize, pos: Vec2, time: f64) -> u32 {
         if digit >= self.finger_tap_count.len() {
             return 0

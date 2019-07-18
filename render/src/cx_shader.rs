@@ -106,18 +106,28 @@ pub struct CxShader {
     pub name: String,
     pub shader_gen: ShaderGen,
     pub platform: Option<CxPlatformShader>,
-    pub mapping: CxShaderMapping
+    pub mapping: CxShaderMapping,
+
+    pub dynamic: Option<CxDynamicShader>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct CxDynamicShader {
-    pub name: String,
-    pub platform: Option<CxPlatformShader>,
-    pub mapping: CxShaderMapping,
     pub source: String,
     pub needs_rebuild: bool,
     pub error_log: String,
     pub valid: bool,
+}
+
+impl Default for CxDynamicShader {
+    fn default() -> Self {
+        Self {
+            source: String::from(""),
+            needs_rebuild: false,
+            error_log: String::from(""),
+            valid: false,
+        }
+    }
 }
 
 impl CxShader {
