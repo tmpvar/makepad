@@ -59,7 +59,6 @@ impl GraphNodeCore for GraphNodeCoreType {
     fn draw_node_core(&mut self, cx: &mut Cx, renderable_area: &mut Rect) {
         match self {
             GraphNodeCoreType::Debug(n) => {
-                println!("draw_node_core!");
                 n.draw_node_core(cx, renderable_area);
             }
             _ =>  println!("draw_node_core missed"),
@@ -102,12 +101,12 @@ pub struct DebugNode {
 fn default_debug_source() -> String {
     String::from("
         #include <metal_stdlib>
-        using namespace metal;
-        struct _Geom{
+            using namespace metal;
+            struct _Geom{
             packed_float2 geom;
-        };
+            };
 
-        struct _Inst{
+            struct _Inst{
             float x;
             float y;
             float w;
@@ -115,24 +114,24 @@ fn default_debug_source() -> String {
             packed_float4 color;
             packed_float2 start;
             packed_float2 end;
-        };
+            };
 
-        struct _UniCx{
+            struct _UniCx{
             float4x4 camera_projection;
             float dpi_factor;
             float dpi_dilate;
-        };
+            };
 
-        struct _UniVw{
+            struct _UniVw{
             float2 view_scroll;
             float4 view_clip;
-        };
+            };
 
-        struct _UniDr{
+            struct _UniDr{
             float view_do_scroll;
-        };
+            };
 
-        struct _Loc{
+            struct _Loc{
             float2 df_pos;
             float4 df_result;
             float2 df_last_pos;
@@ -145,21 +144,21 @@ fn default_debug_source() -> String {
             float df_aa;
             float df_scale;
             float df_field;
-        };
+            };
 
-        struct _Tex{
-        };
+            struct _Tex{
+            };
 
-        #define  PI (3.141592653589793)
-        #define  E (2.718281828459045)
-        #define  LN2 (0.6931471805599453)
-        #define  LN10 (2.302585092994046)
-        #define  LOG2E (1.4426950408889634)
-        #define  LOG10E (0.4342944819032518)
-        #define  SQRT1_2 (0.7071067811865476)
-        #define  TORAD (0.017453292519943295)
-        #define  GOLDEN (1.618033988749895)
-        struct _Vary{
+            #define  PI (3.141592653589793)
+            #define  E (2.718281828459045)
+            #define  LN2 (0.6931471805599453)
+            #define  LN10 (2.302585092994046)
+            #define  LOG2E (1.4426950408889634)
+            #define  LOG10E (0.4342944819032518)
+            #define  SQRT1_2 (0.7071067811865476)
+            #define  TORAD (0.017453292519943295)
+            #define  GOLDEN (1.618033988749895)
+            struct _Vary{
             float4 mtl_position [[position]];
             float2 pos;
             float w;
@@ -167,36 +166,118 @@ fn default_debug_source() -> String {
             float2 start;
             float2 end;
             float4 color;
-        };
+            };
 
-        //Vertex shader
-        float4 _vertex(_Tex _tex, thread _Loc &_loc, thread _Vary &_vary, thread _Geom &_geom, thread _Inst &_inst, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+            //Vertex shader
+            float4 _vertex(_Tex _tex, thread _Loc &_loc, thread _Vary &_vary, thread _Geom &_geom, thread _Inst &_inst, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
             float2 shift = -_uni_vw.view_scroll*_uni_dr.view_do_scroll;
             float2 clipped = clamp(float2(_geom.geom)*float2(float(_inst.w), float(_inst.h))+float2(float(_inst.x), float(_inst.y))+shift, _uni_vw.view_clip.xy, _uni_vw.view_clip.zw);
             _vary.pos = (clipped-shift-float2(float(_inst.x), float(_inst.y)))/float2(float(_inst.w), float(_inst.h));
             return float4(clipped.x, clipped.y, 0.0, 1.0)*_uni_cx.camera_projection;
-        }
-
-        vertex _Vary _vertex_shader(_Tex _tex, device _Geom *in_geometries [[buffer(0)]], device _Inst *in_instances [[buffer(1)]],
-        device _UniCx &_uni_cx [[buffer(2)]], device _UniVw &_uni_vw [[buffer(3)]], device _UniDr &_uni_dr [[buffer(4)]],
-        uint vtx_id [[vertex_id]], uint inst_id [[instance_id]]){
+            }
+            //Pixel shader
+            float _df_calc_blur(float w, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+            float wa = clamp(-w*_loc.df_aa, 0.0, 1.0);
+            float wb = 1.0;
+            if(_loc.df_blur>0.001){
+                wb = clamp(-w/_loc.df_blur, 0.0, 1.0);
+            };
+            return wa*wb;
+            }
+            float4 _df_fill_keep(float4 color, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+            float f = _df_calc_blur(_loc.df_shape, _tex, _loc, _vary, _uni_cx, _uni_vw, _uni_dr);
+            float4 source = float4(color.rgb*color.a, color.a);
+            _loc.df_result = source*f+_loc.df_result*(1.0-source.a*f);
+            if(_loc.df_has_clip>0.5){
+                float f2 = 1.0-_df_calc_blur(-_loc.df_clip, _tex, _loc, _vary, _uni_cx, _uni_vw, _uni_dr);
+                _loc.df_result = source*f2+_loc.df_result*(1.0-source.a*f2);
+            };
+            return _loc.df_result;
+            }
+            float4 _df_stroke_keep(float4 color, float width, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                float f = _df_calc_blur(abs(_loc.df_shape)-width/_loc.df_scale, _tex, _loc, _vary, _uni_cx, _uni_vw, _uni_dr);
+                float4 source = float4(color.rgb*color.a, color.a);
+                float4 dest = _loc.df_result;
+                _loc.df_result = source*f+dest*(1.0-source.a*f);
+                return _loc.df_result;
+            }
+            float _df_antialias(float2 p, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                return 1.0/length(float2(length(dfdx(p)), length(dfdy(p))));
+            }
+            float4 _df_fill(float4 color, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                _df_fill_keep(color, _tex, _loc, _vary, _uni_cx, _uni_vw, _uni_dr);
+                _loc.df_old_shape = _loc.df_shape = 100000000000000000000.0;
+                _loc.df_clip = -100000000000000000000.0;
+                _loc.df_has_clip = 0.0;
+                return _loc.df_result;
+            }
+            void _df_circle(float x, float y, float r, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+            float2 c = _loc.df_pos-float2(x, y);
+                _loc.df_field = (length(c.xy)-r)/_loc.df_scale;
+                _loc.df_old_shape = _loc.df_shape;
+                _loc.df_shape = min(_loc.df_shape, _loc.df_field);
+            }
+            float4 _df_stroke(float4 color, float width, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                _df_stroke_keep(color, width, _tex, _loc, _vary, _uni_cx, _uni_vw, _uni_dr);
+                _loc.df_old_shape = _loc.df_shape = 100000000000000000000.0;
+                _loc.df_clip = -100000000000000000000.0;
+                _loc.df_has_clip = 0.0;
+                return _loc.df_result;
+            }
+            void _df_line_to(float x, float y, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                float2 p = float2(x, y);
+                float2 pa = _loc.df_pos-_loc.df_last_pos;
+                float2 ba = p-_loc.df_last_pos;
+                float h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0);
+                float s = sign(pa.x*ba.y-pa.y*ba.x);
+                _loc.df_field = length(pa-ba*h)/_loc.df_scale;
+                _loc.df_old_shape = _loc.df_shape;
+                _loc.df_shape = min(_loc.df_shape, _loc.df_field);
+                _loc.df_clip = max(_loc.df_clip, _loc.df_field*s);
+                _loc.df_has_clip = 1.0;
+                _loc.df_last_pos = p;
+            }
+            void _df_move_to(float x, float y, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                _loc.df_last_pos = _loc.df_start_pos = float2(x, y);
+            }
+            float2 _df_viewport(float2 pos, _Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                _loc.df_pos = pos;
+                _loc.df_result = float4(0.0, 0.0, 0.0, 0.0);
+                _loc.df_old_shape = _loc.df_shape = 100000000000000000000.0;
+                _loc.df_clip = -100000000000000000000.0;
+                _loc.df_blur = 0.00001;
+                _loc.df_aa = _df_antialias(pos, _tex, _loc, _vary, _uni_cx, _uni_vw, _uni_dr);
+                _loc.df_scale = 1.0;
+                _loc.df_field = 0.0;
+                _loc.df_clip = 0.0;
+                _loc.df_has_clip = 0.0;
+                return _loc.df_pos;
+            }
+            float4 _pixel(_Tex _tex, thread _Loc &_loc, thread _Vary &_vary, device _UniCx &_uni_cx, device _UniVw &_uni_vw, device _UniDr &_uni_dr){
+                
+                return float4(_vary.pos.x, 0, _vary.pos.y, 1);
+            }
+            vertex _Vary _vertex_shader(_Tex _tex, device _Geom *in_geometries [[buffer(0)]], device _Inst *in_instances [[buffer(1)]],
+            device _UniCx &_uni_cx [[buffer(2)]], device _UniVw &_uni_vw [[buffer(3)]], device _UniDr &_uni_dr [[buffer(4)]],
+            uint vtx_id [[vertex_id]], uint inst_id [[instance_id]]){
             _Loc _loc;
             _Vary _vary;
             _Geom _geom = in_geometries[vtx_id];
             _Inst _inst = in_instances[inst_id];
             _vary.mtl_position = _vertex(_tex, _loc, _vary, _geom, _inst, _uni_cx, _uni_vw, _uni_dr);
 
-            _vary.w = _inst.w;
-            _vary.h = _inst.h;
-            _vary.start = _inst.start;
-            _vary.end = _inst.end;
-            _vary.color = _inst.color;
-            return _vary;
-        };
-        fragment float4 _fragment_shader(){
-            return float4(1, 0, 1, 1);
-        };                
-        
+                _vary.w = _inst.w;
+                _vary.h = _inst.h;
+                _vary.start = _inst.start;
+                _vary.end = _inst.end;
+                _vary.color = _inst.color;
+                return _vary;
+            };
+            fragment float4 _fragment_shader(_Vary _vary[[stage_in]],_Tex _tex,
+            device _UniCx &_uni_cx [[buffer(0)]], device _UniVw &_uni_vw [[buffer(1)]], device _UniDr &_uni_dr [[buffer(2)]]){
+            _Loc _loc;
+            return _pixel(_tex, _loc, _vary, _uni_cx, _uni_vw, _uni_dr);
+            };
         "
     )
 }
@@ -211,20 +292,36 @@ impl GraphNodeCore for DebugNode {
         // add a test shader that needs to be rebuilt
         self.bg = Some(Quad {
             do_scroll: false,
-            color: color("#FFF"),
+            color: color("#F00"),
             shader: cx.add_dynamic_shader("some junk", CxDynamicShader {
                 needs_rebuild: true,
                 source: self.source.clone(),
                 ..Default::default()
             })
-        });
+        });        
     }
 
      fn draw_node_core(&mut self, cx: &mut Cx, renderable_area: &mut Rect) {
-         if let Some(bg) = &mut self.bg {
-             println!("DRAWING DEBUG CORE!!!");
-             bg.draw_quad_abs(cx, *renderable_area);
-         }
+        // if let Err(()) = self.view.begin_view(cx, Layout::default()) {
+        //     return
+        // }
+         
+        if let Some(bg) = &mut self.bg {
+             
+            println!("DRAWING DEBUG CORE!!! {}", bg.shader.shader_id.unwrap());
+            let rect = Rect {
+                x: renderable_area.x + 7.,
+                y: renderable_area.y + 7.,
+                w: renderable_area.w - 14.,
+                h: renderable_area.h - 14.,
+            };
+
+            let inst = bg.draw_quad_abs(cx, rect);
+        }
+        
+        // self.view.end_view(cx);
+        // self.view.redraw_view_area(cx);
+        //cx.redraw_child_area(Area::All);
      }
 }
 

@@ -11,7 +11,7 @@ use metal::*;
 use crate::cx_cocoa::*;
 use crate::cx::*;
 use cocoa::base::{id};
-
+use crate::quad::*;
 impl Cx {
     
     pub fn render_view(&mut self, pass_id: usize, view_id: usize, metal_cx: &MetalCx, encoder: &RenderCommandEncoderRef) {
@@ -208,11 +208,18 @@ impl Cx {
                     );
 
                     match r {
-                        Ok(platform) => {
+                        Ok(mut platform) => {
                             println!("compiled shader source!");
                             dsh.valid = true;
                             dsh.error_log = String::from("");
+                            sh.shader_gen = Quad::def_quad_shader();
+                            // Note: shaders _require_ a shadergen because the geom indices and verts are looked up
+                            // while drawing instances.
+                            platform.geom_ibuf.update_with_u32_data(metal_cx, &sh.shader_gen.geometry_indices);
+                            platform.geom_vbuf.update_with_f32_data(metal_cx, &sh.shader_gen.geometry_vertices);
+
                             sh.platform = Some(platform);
+                            sh.mapping = create_default_mapping();
                         }
                         Err(e) => {
                             println!("SHADER ERROR: {}", e.msg);
@@ -805,4 +812,15 @@ use std::os::unix::process::{CommandExt};
 
 pub fn spawn_process_command(cmd: &str, args: &[&str], current_dir: &str) -> Result<Child, std::io::Error> {
     unsafe {Command::new(cmd) .args(args) .pre_exec(close_fds_on_exec(vec![0, 1, 2]).unwrap()) .stdout(Stdio::piped()) .stderr(Stdio::piped()) .current_dir(current_dir) .spawn()}
+}
+
+pub fn create_default_mapping() -> CxShaderMapping {
+    let sg = Quad::def_quad_shader();
+    let r = Cx::mtl_assemble_shader(&sg);
+    match r {
+        Ok((_, mapping)) => mapping,
+        Err(e) => {
+            return CxShaderMapping::default();
+        }
+    }
 }
